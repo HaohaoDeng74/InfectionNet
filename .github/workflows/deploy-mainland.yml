@@ -1,0 +1,36 @@
+name: Deploy static site to Alibaba OSS
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Refresh literature snapshot]
+    types: [completed]
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'data/papers.json'
+      - 'data/site-config.json'
+      - 'scripts/deploy_oss.py'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ vars.DEPLOY_OSS == 'true' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install OSS SDK
+        run: python -m pip install --disable-pip-version-check oss2
+      - name: Upload static files
+        env:
+          OSS_ENDPOINT: ${{ vars.OSS_ENDPOINT }}
+          OSS_BUCKET: ${{ vars.OSS_BUCKET }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+        run: python scripts/deploy_oss.py
