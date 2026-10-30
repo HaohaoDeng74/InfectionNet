@@ -22,7 +22,7 @@
   <header class="top"><div class="brand">Infection<span>Net</span></div><div class="top-note">感染 · 免疫 · 多组学 / 文献索引</div></header>
   <main>
     <section class="intro"><div><div class="eyebrow">Research literature navigator</div><h1>感染免疫研究，沿着证据找下去。</h1><p>持续追踪感染与免疫多组学论文。按专题、时间和关键词筛选；每条记录保留可回溯的来源链接。</p></div><div class="updated"><span>数据快照更新</span><strong id="updated">读取中…</strong></div></section>
-    <div class="focus"><b>本周更新</b><span>按首次发表日期筛选最近 7 天收录的记录；预印本与正式发表版本可能分别出现。</span></div>
+    <div class="focus"><b>本周更新</b><span>按 Europe PMC 首次发表日期筛选最近 7 个 UTC 日（含今天）；预印本与正式发表版本可能分别出现。</span></div>
     <section aria-label="文献筛选">
       <div class="controls"><input class="search" id="search" type="search" placeholder="搜索标题、摘要、作者或 DOI" aria-label="搜索文献"><select class="select" id="year" aria-label="按年份筛选"><option value="">全部年份</option></select><select class="select" id="sort" aria-label="排序"><option value="new">最新优先</option><option value="old">最早优先</option></select></div>
       <div class="tabs" role="group" aria-label="专题筛选"><button class="tab" data-topic="all" aria-pressed="true">全部文献</button><button class="tab" data-topic="week" aria-pressed="false">一周内</button><button class="tab" data-topic="sepsis" aria-pressed="false">脓毒症</button><button class="tab" data-topic="microbial_single_cell" aria-pressed="false">微生物单细胞</button><button class="tab" data-topic="infection_omics" aria-pressed="false">感染免疫多组学</button></div>
@@ -38,17 +38,28 @@
     const el=(id)=>document.getElementById(id);
     const safe=(s='')=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const dateOf=p=>p.firstPublicationDate||p.pubDate||'';
-    function weekOld(p){const d=new Date(dateOf(p));return !Number.isNaN(+d)&&((Date.now()-d.getTime())<=7*86400000)&&((Date.now()-d.getTime())>=-86400000)}
-    function topicList(p){const t=[...(p.topics||[])];if(weekOld(p)&&!t.includes('week'))t.push('week');return t}
+    function weekOld(p,now=Date.now()){
+      const value=p.firstPublicationDate;
+      if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+      const date=Date.parse(value+'T00:00:00Z');
+      if(!Number.isFinite(date)||new Date(date).toISOString().slice(0,10)!==value)return false;
+      const today=Math.floor(now/86400000)*86400000;
+      return date>=today-6*86400000&&date<=today;
+    }
+    function topicList(p,now=Date.now()){
+      const t=[...new Set((Array.isArray(p.topics)?p.topics:[]).filter(t=>t!=='week'))];
+      if(weekOld(p,now))t.push('week');
+      return t;
+    }
     function render(){
-      const q=el('search').value.trim().toLowerCase(),year=el('year').value,sort=el('sort').value;
-      let rows=papers.filter(p=>topic==='all'||topicList(p).includes(topic));
+      const now=Date.now(),q=el('search').value.trim().toLowerCase(),year=el('year').value,sort=el('sort').value;
+      let rows=papers.filter(p=>topic==='all'||topicList(p,now).includes(topic));
       if(q)rows=rows.filter(p=>[p.title,p.abstractText,p.authorString,p.doi,p.journalTitle].join(' ').toLowerCase().includes(q));
       if(year)rows=rows.filter(p=>String(p.pubYear||'')===year);
       rows.sort((a,b)=>sort==='new'?dateOf(b).localeCompare(dateOf(a)):dateOf(a).localeCompare(dateOf(b)));
       el('count').innerHTML=`显示 <strong>${rows.length}</strong> / ${papers.length} 篇`;
       if(!rows.length){el('papers').innerHTML='<div class="empty">没有找到匹配的论文。试试更短的关键词，或切换专题。</div>';return}
-      el('papers').innerHTML=rows.map((p,i)=>`<article class="paper"><div class="paper-top"><div class="journal">${safe(p.journalTitle||p.source||'研究论文')}</div><div class="paper-date">${safe(dateOf(p)||p.pubYear||'日期待补')}</div></div><h2>${safe(p.title||'无标题')}</h2><p class="authors">${safe(p.authorString||'作者信息待补')} · ${safe(p.pubYear||'年份待补')}</p><p class="abstract">${safe(p.abstractText||'摘要暂缺，可通过文献来源链接查看论文详情。')}</p><div class="tags">${topicList(p).map(t=>`<span class="tag">${safe(labels[t]||t)}</span>`).join('')}${p.isOpenAccess==='Y'?'<span class="tag">开放全文</span>':''}</div><div class="paper-actions"><button class="detail" data-index="${i}" data-key="${safe(p.id||'')}">查看文献详情</button><span class="ids">${p.pmid?'PMID '+safe(p.pmid):safe(p.doi||'')}</span></div></article>`).join('');
+      el('papers').innerHTML=rows.map((p,i)=>`<article class="paper"><div class="paper-top"><div class="journal">${safe(p.journalTitle||p.source||'研究论文')}</div><div class="paper-date">${safe(dateOf(p)||p.pubYear||'日期待补')}</div></div><h2>${safe(p.title||'无标题')}</h2><p class="authors">${safe(p.authorString||'作者信息待补')} · ${safe(p.pubYear||'年份待补')}</p><p class="abstract">${safe(p.abstractText||'摘要暂缺，可通过文献来源链接查看论文详情。')}</p><div class="tags">${topicList(p,now).map(t=>`<span class="tag">${safe(labels[t]||t)}</span>`).join('')}${p.isOpenAccess==='Y'?'<span class="tag">开放全文</span>':''}</div><div class="paper-actions"><button class="detail" data-index="${i}" data-key="${safe(p.id||'')}">查看文献详情</button><span class="ids">${p.pmid?'PMID '+safe(p.pmid):safe(p.doi||'')}</span></div></article>`).join('');
       el('papers').querySelectorAll('.detail').forEach(btn=>btn.addEventListener('click',()=>openPaper(papers.find(p=>String(p.id)===btn.dataset.key))));
     }
     function openPaper(p){if(!p)return;el('dialogKicker').textContent=[p.journalTitle,p.pubYear].filter(Boolean).join(' · ');el('dialogTitle').textContent=p.title||'无标题';el('dialogMeta').textContent=[p.authorString,p.doi?'DOI: '+p.doi:'',p.pmid?'PMID: '+p.pmid:''].filter(Boolean).join(' · ');
@@ -59,7 +70,12 @@
     el('closeDialog').addEventListener('click',()=>el('paperDialog').close());el('paperDialog').addEventListener('click',e=>{if(e.target===el('paperDialog'))el('paperDialog').close()});
     document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{topic=b.dataset.topic;document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-pressed',String(t===b)));render()}));
     ['search','year','sort'].forEach(id=>el(id).addEventListener(id==='search'?'input':'change',render));
-    async function load(){try{const [res,configRes]=await Promise.all([fetch('./data/papers.json',{cache:'no-store'}),fetch('./data/site-config.json',{cache:'no-store'}).catch(()=>null)]);if(!res.ok)throw new Error('HTTP '+res.status);const data=await res.json();papers=data.papers||[];el('updated').textContent=data.updated_at?new Date(data.updated_at).toLocaleString('zh-CN',{dateStyle:'medium',timeStyle:'short'}):'等待首次更新';if(configRes&&configRes.ok){const config=await configRes.json();if(config.icp_record)el('icpFiling').innerHTML=`<a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">${safe(config.icp_record)}</a>`}const years=[...new Set(papers.map(p=>p.pubYear).filter(Boolean))].sort((a,b)=>b-a);el('year').innerHTML='<option value="">全部年份</option>'+years.map(y=>`<option value="${safe(y)}">${safe(y)}</option>`).join('');render()}catch(e){el('updated').textContent='索引暂不可用';el('count').textContent='文献索引读取失败；请稍后刷新。';el('papers').innerHTML='<div class="empty">暂时无法读取本地文献快照。刷新页面或检查部署时是否包含 data/papers.json。</div>';}}
+    async function load(){try{const [res,configRes]=await Promise.all([fetch('./data/papers.json',{cache:'no-store'}),fetch('./data/site-config.json',{cache:'no-store'}).catch(()=>null)]);if(!res.ok)throw new Error('HTTP '+res.status);const data=await res.json();if(!Array.isArray(data.papers)||data.record_count!==data.papers.length)throw new Error('Invalid snapshot');papers=data.papers;el('updated').textContent=data.updated_at?new Date(data.updated_at).toLocaleString('zh-CN',{dateStyle:'medium',timeStyle:'short'}):'等待首次更新';if(configRes&&configRes.ok){const config=await configRes.json();if(config.icp_record)el('icpFiling').innerHTML=`<a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">${safe(config.icp_record)}</a>`}const age=Date.now()-Date.parse(data.updated_at);if(!Number.isFinite(age)||age>48*3600000)el('updated').textContent+=' · 快照可能已过期';if(data.bootstrap)document.querySelector('.focus span').textContent+=' 当前为 '+papers.length+' 条启动样本，完整快照需运行更新脚本生成。';const stats=Object.values(data.query_stats||{});if(stats.some(s=>s.truncated))document.querySelector('.focus span').textContent+=' 当前为限量发现快照，每专题最多 '+Math.max(...stats.map(s=>s.limit||0))+' 条，另保留人工指定文献。';const years=[...new Set(papers.map(p=>p.pubYear).filter(Boolean))].sort((a,b)=>b-a);el('year').innerHTML='<option value="">全部年份</option>'+years.map(y=>`<option value="${safe(y)}">${safe(y)}</option>`).join('');render()}catch(e){el('updated').textContent='索引暂不可用';el('count').textContent='文献索引读取失败；请稍后刷新。';el('papers').innerHTML='<div class="empty">暂时无法读取本地文献快照。刷新页面或检查部署时是否包含 data/papers.json。</div>';}}
+    // Recompute on UTC day rollover, including a tab left open across midnight.
+    let renderedDay=Math.floor(Date.now()/86400000);
+    function refreshDay(){const day=Math.floor(Date.now()/86400000);if(day!==renderedDay){renderedDay=day;render()}}
+    setInterval(refreshDay,60000);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshDay()});
     load();
   </script>
 </body>

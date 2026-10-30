@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   deploy:
-    if: ${{ vars.DEPLOY_OSS == 'true' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ vars.DEPLOY_OSS == 'true' && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
